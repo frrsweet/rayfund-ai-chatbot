@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Журнал сообщений</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#1f2937;background:#fafafa}
+  header{display:flex;gap:12px;align-items:center;padding:14px 20px;background:#fff;border-bottom:1px solid #e3e8e8}
+  h1{font-size:18px;margin:0;flex:1}
+  input{border:1px solid #cbd5d5;border-radius:8px;padding:7px 10px;font-size:14px}
+  button{background:#0f766e;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:14px;cursor:pointer}
+  .wrap{overflow-x:auto;padding:16px 20px}
+  table{border-collapse:collapse;width:100%;background:#fff;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #eef1f1;vertical-align:top}
+  th{background:#f3f6f6;font-weight:600}
+  td.text{max-width:420px;white-space:pre-wrap;word-wrap:break-word}
+  tr.user td.role{color:#0f766e;font-weight:600}
+  tr.fallback td.status{color:#b91c1c;font-weight:600}
+  #msg{padding:0 20px;color:#b91c1c}
+</style>
+</head>
+<body>
+<header>
+  <h1>Журнал сообщений</h1>
+  <input id="key" type="password" placeholder="Ключ доступа" aria-label="Ключ доступа">
+  <button id="go">Показать</button>
+</header>
+<p id="msg"></p>
+<div class="wrap">
+  <table>
+    <thead><tr><th>Время</th><th>Сессия</th><th>Кто</th><th>Текст</th><th>Тема</th><th>Score</th><th>Статус</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+<script>
+  var timer = null;
+  var keyEl = document.getElementById("key");
+  var msgEl = document.getElementById("msg");
+  var rows = document.getElementById("rows");
+
+  function cell(text, cls) {
+    var td = document.createElement("td");
+    if (cls) td.className = cls;
+    td.textContent = text == null ? "" : text;
+    return td;
+  }
+
+  function load() {
+    fetch("/api/admin/messages?limit=300", { headers: { "X-Admin-Key": keyEl.value } })
+      .then(function (r) {
+        if (r.status === 401) throw new Error("Неверный ключ");
+        if (!r.ok) throw new Error("Ошибка загрузки");
+        return r.json();
+      })
+      .then(function (data) {
+        msgEl.textContent = "";
+        rows.innerHTML = "";
+        data.forEach(function (m) {
+          var tr = document.createElement("tr");
+          tr.className = m.role + " " + (m.status || "");
+          tr.appendChild(cell(new Date(m.ts * 1000).toLocaleString("ru-RU")));
+          tr.appendChild(cell(m.session_id.slice(0, 8)));
+          tr.appendChild(cell(m.role === "user" ? "Пользователь" : "Бот", "role"));
+          tr.appendChild(cell(m.text, "text"));
+          tr.appendChild(cell(m.intent));
+          tr.appendChild(cell(m.score == null ? "" : m.score.toFixed(2)));
+          tr.appendChild(cell(m.status, "status"));
+          rows.appendChild(tr);
+        });
+      })
+      .catch(function (e) {
+        msgEl.textContent = e.message;
+        clearInterval(timer);
+      });
+  }
+
+  document.getElementById("go").addEventListener("click", function () {
+    clearInterval(timer);
+    load();
+    timer = setInterval(load, 5000);
+  });
+</script>
+</body>
+</html>
